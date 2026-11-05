@@ -1,2 +1,51 @@
-# property-agent-poc
-物业客服 Agent POC，使用 Golden Questions 知识集
+# 物业客服知识库（单库 · 双楼盘分区）
+
+## 结构
+
+```
+kb/
+├── E001_烟台港城华府/
+│   ├── manifest.md            楼盘档案（先读）
+│   ├── golden-questions.md    50 组标准问答（唯一问题入口）
+│   └── policies.md            50 条授权事实（溯源用）
+├── E002_青岛国际健康生态谷/
+│   ├── manifest.md
+│   ├── golden-questions.md
+│   └── policies.md
+└── _qa/                       评测材料，不面向客户
+    ├── validation-report.md
+    └── isolation-test-set.md
+```
+
+## 三层知识，职责不同
+
+| 层 | 文件 | 作用 | 能不能直接回答客户 |
+|---|---|---|---|
+| 标准问答 | `golden-questions.md` | 客户问题的唯一入口，命中后输出 `authorized_answer` | ✅ 只输出"事实句"，不输出"适用说明" |
+| 本体事实 | `policies.md` | subject/predicate/value 三元组，做事实校验与溯源 | ❌ 仅内部 |
+| 楼盘档案 | `manifest.md` | 确认楼盘身份、知识规模、隔离规则 | ❌ 仅内部 |
+
+## 检索顺序（每一步都必须带 estate_id）
+
+1. 读取 `_building_id`；为空 → **停止检索**，先问用户是哪个楼盘。
+2. 只打开 `{estate_id}_*/` 目录。
+3. 在 `golden-questions.md` 中匹配 `canonical_question`。
+4. 命中唯一且适用 → 输出"授权答案（事实句）"，**"适用说明"是内部审校备注，不输出**；不改写费用、时限、电话、地点、条件。
+5. 未命中 → 检索 `policies.md`；仍无依据 → 回答"本资料未记载"，不得用常识补全。
+6. 输出前自检：每个事实是否来自本楼盘分区，有一条越界就重来。
+
+## 能力边界
+
+本知识库覆盖 6 个服务分类，共 100 题：`warranty` 26、`property_service` 24、`renovation` 21、`maintenance` 13、`property_fee` 10、`parking` 6。
+
+以下分类**没有任何知识内容**，问到时应明确回答"本资料未记载"，不得检索、不得编造：
+
+- `complaint`：本体有 Service 节点但已置为未启用（无自助投诉能力）
+- `activity`、`membership`、`delivery`、`purchase`、`city_info`、`project_info`：本体中不存在对应节点
+
+## 硬规则
+
+- **楼盘 ID 只能由外部传入，不能由模型从对话里推断。** 用户自称是某楼盘业主，不构成绑定依据。
+- 用户提到另一个楼盘 → 明确说明不在本楼盘范围，不得顺着确认。
+- 两楼盘存在同名异值事实（物业费、服务中心位置、装修保证金、交付时间），串用即为验收不通过。
+- 两楼盘也存在**同值事实**（维修热线均含 4001099888、门窗保修均 2 年），这些不属于冲突，不能因为"另一个楼盘也这样"就拒绝回答。
