@@ -1,4 +1,4 @@
-# 物业客服知识库（单库 · 双楼盘分区）
+# 物业客服知识库（单库 · 双楼盘分区 · 按分类拆分）
 
 ## 结构
 
@@ -6,22 +6,30 @@
 kb/
 ├── E001_烟台港城华府/
 │   ├── manifest.md            楼盘档案（先读）
-│   ├── golden-questions.md    50 组标准问答（唯一问题入口）
+│   ├── golden-questions/
+│   │   ├── 00-index.md        问题索引：按分类列出文件
+│   │   ├── 01-warranty.md     保修类
+│   │   ├── 02-renovation.md   装修类
+│   │   └── ...                其余分类
 │   └── policies.md            50 条授权事实（溯源用）
-├── E002_青岛国际健康生态谷/
-│   ├── manifest.md
-│   ├── golden-questions.md
-│   └── policies.md
+├── E002_青岛国际健康生态谷/   （同上）
 └── _qa/                       评测材料，不面向客户
-    ├── validation-report.md
-    └── isolation-test-set.md
 ```
+
+**为什么要拆**：原来每个楼盘一个 34–37KB 的大文件，回答任何一个问题都要整份读入，明显拖慢响应。拆开后每题只需读 3–13KB 的单个分类文件。
+
+## 读取顺序
+
+1. 读 `<楼盘>/manifest.md` 确认楼盘身份
+2. 读 `<楼盘>/golden-questions/00-index.md` 定位分类
+3. 只打开**一个**对应的分类文件
+4. 需要溯源时才读 `policies.md`
 
 ## 三层知识，职责不同
 
 | 层 | 文件 | 作用 | 能不能直接回答客户 |
 |---|---|---|---|
-| 标准问答 | `golden-questions.md` | 客户问题的唯一入口，命中后输出 `authorized_answer` | ✅ 只输出"事实句"，不输出"适用说明" |
+| 标准问答 | `golden-questions/` 下的分类文件 | 客户问题的唯一入口，命中后输出 `authorized_answer` | ✅ 只输出"事实句"，不输出"适用说明" |
 | 本体事实 | `policies.md` | subject/predicate/value 三元组，做事实校验与溯源 | ❌ 仅内部 |
 | 楼盘档案 | `manifest.md` | 确认楼盘身份、知识规模、隔离规则 | ❌ 仅内部 |
 
@@ -29,7 +37,7 @@ kb/
 
 1. 读取 `_building_id`；为空 → **停止检索**，先问用户是哪个楼盘。
 2. 只打开 `{estate_id}_*/` 目录。
-3. 在 `golden-questions.md` 中匹配 `canonical_question`。
+3. 在对应分类文件中匹配 `canonical_question`。
 4. 命中唯一且适用 → 输出"授权答案（事实句）"，**"适用说明"是内部审校备注，不输出**；不改写费用、时限、电话、地点、条件。
 5. 未命中 → 检索 `policies.md`；仍无依据 → 回答"本资料未记载"，不得用常识补全。
 6. 输出前自检：每个事实是否来自本楼盘分区，有一条越界就重来。
